@@ -3,19 +3,21 @@ package simplelru
 import (
 	"container/list"
 	"errors"
+	"sync"
 	"time"
 )
 
 // EvictCallback is used to get a callback when a cache entry is evicted
 type EvictCallbackTtl func(key interface{}, value interface{})
 
-// LRU implements a non-thread safe fixed size LRU cache
+// LRUTtl implements a thread safe fixed size, ttl enabled LRU cache
 type LRUTtl struct {
 	size      int
 	evictList *list.List
 	items     map[interface{}]*list.Element
 	onEvict   EvictCallbackTtl
 	expiry time.Duration
+	lock sync.RWMutex
 }
 
 
@@ -32,14 +34,16 @@ func (e *entry_ttl) CleanUp(lru *LRUTtl) {
 
 	// timer expired, remove item
 	// possible deadlock: may have to sync this
+	lru.lock.Lock()
 	lru.Remove(e.key)
+	lru.lock.Unlock()
 }
 
 func (e *entry_ttl) Reset(duration time.Duration) {
 	if !e.timer.Stop() {
 		<-e.timer.C
 	}
-	// reset
+	// reset timer
 	e.timer.Reset(duration)
 }
 
@@ -71,6 +75,8 @@ func (c *LRUTtl) Purge() {
 
 // Add adds a value to the cache.  Returns true if an eviction occurred.
 func (c *LRUTtl) Add(key, value interface{}) (evicted bool) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
 	// Check for existing item
 	if ent, ok := c.items[key]; ok {
 		c.evictList.MoveToFront(ent)

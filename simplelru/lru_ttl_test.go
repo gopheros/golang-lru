@@ -13,7 +13,7 @@ func TestLRUTtl(t *testing.T) {
 		}
 		evictCounter++
 	}
-	l, err := NewLRUTtl(128, time.Minute, onEvicted)
+	l, err := NewLRUTtl(128, time.Second, onEvicted)
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}
@@ -259,6 +259,27 @@ func TestLRUTtl_Expiry_Reset(t *testing.T) {
 
 	if l.Contains(1) {
 		t.Errorf("Element 1 should have been expired")
+	}
+}
+
+func TestLRUTtl_Expire(t *testing.T) {
+	evictCounter := 0
+	onEvicted := func(k interface{}, v interface{}) {
+		if k != v {
+			t.Fatalf("Evict values not equal (%v!=%v)", k, v)
+		}
+		evictCounter++
+	}
+	l, err := NewLRUTtl(128, time.Microsecond, onEvicted)
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+
+	for i := 0; i < 256; i++ {
+		l.Add(i, i)
+	}
+	if l.Len() == 128 {
+		t.Fatalf("expiry didn't happen, bad len: %v", l.Len())
 	}
 }
 
